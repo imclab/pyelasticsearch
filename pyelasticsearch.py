@@ -125,7 +125,6 @@ from urllib import urlencode
 import logging
 import requests
 
-
 class ElasticSearchError(Exception):
     pass
 
@@ -185,7 +184,11 @@ class ElasticSearch(object):
         url = self._build_url(path)
 
         if body:
-            kwargs['data'] = self._prep_request(body)
+
+            if path.endswith("_bulk"):
+                kwargs['data'] = body
+            else:
+                kwargs['data'] = self._prep_request(body)
 
         if not hasattr(requests, method.lower()):
             raise ElasticSearchError("No such HTTP Method '%s'!" % method.lower())
@@ -239,6 +242,33 @@ class ElasticSearch(object):
             request_method = 'PUT'
         path = self._make_path([index, doc_type, id])
         response = self._send_request(request_method, path, doc, querystring_args)
+        return response
+
+    def bulk_index(self, docs, index, doc_type):
+        """
+    	Index multiple typed JSON documents into a specific index and make them searchable.
+        """
+
+        data = []
+
+        for doc, id in docs:
+
+            header = {'index': { '_index': index, '_type': doc_type }}
+
+            if id:
+                header['index']['_id'] = id
+
+            data.append(json.dumps(header))
+            data.append(json.dumps(doc))
+
+        data = "\n".join(data) + "\n"
+        request_method = 'POST'
+
+        querystring_args = {}
+
+        path = self._make_path([index, doc_type, '_bulk'])
+
+        response = self._send_request(request_method, path, data, querystring_args)
         return response
 
     def delete(self, index, doc_type, id):
